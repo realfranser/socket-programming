@@ -61,10 +61,9 @@ int wait_response(int fd)
     return res;
 }
 
-int c_and_d(const char *cola, char opc)
+int iov_init(const char *cola, char opc, struct iovec *iov)
 {
     int s, c_size;
-    struct iovec iov[3];
 
     if ((s = connect_socket()) < 0)
         return -1;
@@ -90,23 +89,31 @@ int c_and_d(const char *cola, char opc)
     iov[2].iov_base = cola;
     iov[2].iov_len = c_size;
 
-    for (int i = 0; i < 3; i++)
-    {
-        printf("Element %d is -> size: %d, content: %s\n", i, iov[i].iov_len, iov[i].iov_base);
-    }
+    return s;
+}
 
+int createMQ(const char *cola)
+{
+    int s;
+    struct iovec iov[3];
+
+    if ((s = iov_init(cola, 'C', &iov)) < 0)
+        return -1;
     writev(s, iov, 3);
 
     return wait_response(s);
 }
-int createMQ(const char *cola)
-{
-    return c_and_d(cola, 'C');
-}
 
 int destroyMQ(const char *cola)
 {
-    return c_and_d(cola, 'D');
+    int s;
+    struct iovec iov[3];
+
+    if ((s = iov_init(cola, 'D', &iov)) < 0)
+        return -1;
+    writev(s, iov, 3);
+
+    return wait_response(s);
 }
 int put(const char *cola, const void *mensaje, uint32_t tam)
 {
@@ -116,11 +123,11 @@ int put(const char *cola, const void *mensaje, uint32_t tam)
     char *msg;
     int msg_size = tam + 1;
 
-    if ((s = connect_socket()) < 0)
+    if ((s = iov_init(cola, 'P', &iov)) < 0)
         return -1;
 
     /* Set the put option value */
-    char opc = 'P';
+    /*char opc = 'P';
     char *opcion = (char *)malloc(2 * sizeof(char));
     opcion[0] = opc;
     opcion[1] = '\0';
@@ -128,18 +135,18 @@ int put(const char *cola, const void *mensaje, uint32_t tam)
     iov[0].iov_len = 2;
 
     /* Size of the queue and the queue itself*/
-    c_size = strlen(cola) + 1;
+    /*c_size = strlen(cola) + 1;
     iov[1].iov_base = &c_size;
     iov[1].iov_len = sizeof(c_size);
     /* Check that the queue name is not greater than the max allowed */
-    if (c_size > NAME_SIZE)
+    /*if (c_size > NAME_SIZE)
     {
         perror("Nombre de la cola demasiado largo");
         return -1;
     }
     /* Set up the queue */
-    iov[2].iov_base = cola;
-    iov[2].iov_len = c_size;
+    /*iov[2].iov_base = cola;
+    iov[2].iov_len = c_size;*/
 
     /* Check that the size of the message is not greater than the max allowed */
     if (tam > MSG_SIZE)
