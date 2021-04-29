@@ -61,7 +61,7 @@ int wait_response(int fd)
     return res;
 }
 
-int create_destroy(const char *cola, char opc)
+int c_and_d(const char *cola, char opc)
 {
     int s, c_size;
     struct iovec iov[3];
@@ -90,23 +90,34 @@ int create_destroy(const char *cola, char opc)
     iov[2].iov_base = cola;
     iov[2].iov_len = c_size;
 
+    for (int i = 0; i < 3; i++)
+    {
+        printf("Element %d is -> size: %d, content: %s\n", i, iov[i].iov_len, iov[i].iov_base);
+    }
+
     writev(s, iov, 3);
 
     return wait_response(s);
 }
 int createMQ(const char *cola)
 {
-    return create_destroy(cola, 'C');
+    return c_and_d(cola, 'C');
 }
 
 int destroyMQ(const char *cola)
 {
-    return create_destroy(cola, 'D');
+    return c_and_d(cola, 'D');
 }
 int put(const char *cola, const void *mensaje, uint32_t tam)
 {
     int s, c_size;
+    //ssize_t nwritten;
     struct iovec iov[5];
+    char *msg;
+    int msg_size = tam + 1;
+
+    if ((s = connect_socket()) < 0)
+        return -1;
 
     /* Set the put option value */
     char opc = 'P';
@@ -130,9 +141,37 @@ int put(const char *cola, const void *mensaje, uint32_t tam)
     iov[2].iov_base = cola;
     iov[2].iov_len = c_size;
 
+    /* Check that the size of the message is not greater than the max allowed */
+    if (tam > MSG_SIZE)
+    {
+        perror("Mensaje demasiado largo");
+        return -1;
+    }
     /* Size of the message and the message itself */
+    iov[3].iov_base = &tam;
+    iov[3].iov_len = sizeof(tam);
 
-    return 0;
+    if (tam == 0)
+    {
+        msg = (char *)malloc(msg_size * sizeof(char));
+        *msg = (char *)mensaje;
+        msg[tam] = '\0';
+        iov[4].iov_base = msg;
+        iov[4].iov_len = msg_size;
+    }
+    else
+    {
+        iov[4].iov_base = mensaje;
+        iov[4].iov_len = tam;
+    }
+
+    for (int i = 0; i < 5; i++)
+    {
+        printf("Element %d is -> size: %d, content: %s\n", i, iov[i].iov_len, iov[i].iov_base);
+    }
+    writev(s, iov, 5);
+
+    return wait_response(s);
 }
 int get(const char *cola, void **mensaje, uint32_t *tam, bool blocking)
 {

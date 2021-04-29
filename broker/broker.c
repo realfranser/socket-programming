@@ -48,9 +48,23 @@ void free_cola(char *clave, void *valor)
     cola_destroy(aux_queue, NULL);
 }
 
+struct message
+{
+    void *content;
+    int size;
+};
+
+void print_queue(void *value)
+{
+    struct message *msg = value;
+    printf("Contenido de la cola:\n");
+    printf("Size: %d, Contenido: %s\n", msg->size, msg->content);
+    //printf("%s\n", value);
+}
+
 int main(int argc, char *argv[])
 {
-    int s, s_conec, leido;
+    int s, s_conec, leido, api_err;
     unsigned int tam_dir;
     struct sockaddr_in dir, dir_cliente;
     char buf[12];
@@ -62,6 +76,9 @@ int main(int argc, char *argv[])
 
     struct diccionario *dict;
     struct cola *queue;
+
+    struct message *msg;
+    void *msg_p;
 
     if (argc != 2)
     {
@@ -125,6 +142,7 @@ int main(int argc, char *argv[])
             /* Return 2 means: error en read */
             return 2;
         }
+        printf("This is the buf2: %s\n", buf);
         op = buf[0];
 
         /* Leer size del nombre de la cola */
@@ -135,19 +153,18 @@ int main(int argc, char *argv[])
             /* Return 2 means: error en read */
             return 2;
         }
-        //c_size = atoi(buf) + 1;
-
+        printf("This is the buf2: %d\n", c_size);
         /* Reservar espacio para el nombre de la cola */
         cola_name = malloc(c_size);
         /* Leer nombre de la cola */
-        if ((leido = read(s_conec, cola_name, c_size)) < 0)
+        if (recv(s_conec, cola_name, c_size, MSG_WAITALL) < 0)
         {
-            perror("error en read");
+            perror("error en recv");
             read_error(s, s_conec);
             /* Return 2 means: error en read */
             return 2;
         }
-        //printf("Cola \'%s\' reservada\n", cola_name);
+        printf("Cola \'%s\' reservada\n", cola_name);
         printf("Operacion -> %c\n", op);
 
         switch (op)
@@ -189,7 +206,51 @@ int main(int argc, char *argv[])
 
         /* Insert string to an existing queue */
         case 'P':
-            /* code */
+            printf("Estamos aqui\n");
+            msg = malloc(sizeof(struct message));
+            /* Get message size */
+            if ((leido = read(s_conec, &msg->size, sizeof(int))) < 0)
+            {
+                perror("error en read");
+                read_error(s, s_conec);
+                /* Return 2 means: error en read */
+                return 2;
+            }
+            printf("El size del mensaje es de: %d\n", msg->size);
+            if (msg->size == 0)
+            {
+                printf("El mensaje no tiene contenido, la cola no cambia\n");
+                return_ok(s_conec);
+                break;
+            }
+            /* Get queue from dict */
+            queue = dic_get(dict, cola_name, &api_err);
+            if (api_err < 0)
+            {
+                perror("Error encontrando la cola (nombre incorrecto)");
+                return_err(s_conec);
+                break;
+            }
+
+            /* Get message */
+            msg_p = malloc(msg->size);
+            if (recv(s_conec, msg_p, msg->size, MSG_WAITALL) < 0)
+            {
+                perror("error en recv");
+                read_error(s, s_conec);
+                return 2;
+            }
+            msg->content = msg_p;
+            /* Introduce message in the selected queue */
+            if (cola_push_back(queue, msg) < 0)
+            {
+                perror("Error introduciendo mensaje en la cola");
+                return_err(s_conec);
+                break;
+            }
+            printf("La cola \'%s\' ha sido actualizada correctamente\n", cola_name);
+            cola_visit(queue, print_queue);
+            return_ok(s_conec);
             break;
 
         /* Get value of an existing queue */
