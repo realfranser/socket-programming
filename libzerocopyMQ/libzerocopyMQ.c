@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* Check for removal */
 char *pchar;
 
 /* Connects to socket using env variables (used by all 4 options) */
@@ -46,37 +47,6 @@ int connect_socket()
     return s;
 }
 
-char *reverseString(char *s, int l)
-{
-    int i;
-    char *r;
-    r = (char *)malloc((l + 2) * sizeof(char));
-    for (i = 0; i < l; i++)
-    {
-        r[(l - (i + 1))] = s[i];
-    }
-    r[l] = '\0';
-    return r;
-}
-
-char *intToString(long n)
-{
-    char *s;
-    s = (char *)malloc(sizeof(char));
-    int i = 0;
-    s[i] = (char)((n % 10) + 48);
-    while (n / 10 > 0)
-    {
-        i++;
-        s = (char *)realloc(s, (i + 2) * sizeof(char));
-        n /= 10;
-        s[i] = (char)((n % 10) + 48);
-    }
-    s = reverseString(s, (i + 1));
-    s[(i + 1)] = '\0';
-    return s;
-}
-
 int wait_response(int fd)
 {
     /* Note: hacer switch para printear el motivo del error */
@@ -93,27 +63,32 @@ int wait_response(int fd)
 
 int create_destroy(const char *cola, char opc)
 {
-    int s = connect_socket();
-    int respuesta;
+    int s, c_size;
+    struct iovec iov[3];
+
+    if ((s = connect_socket()) < 0)
+        return -1;
+
     char *opcion = (char *)malloc(2 * sizeof(char));
-    char *sizeof_cola_s = intToString(strlen(cola));
+
+    /* Set the create or destroy option value */
     opcion[0] = opc;
     opcion[1] = '\0';
-    ssize_t nwritten;
-    struct iovec iov[3];
     iov[0].iov_base = opcion;
     iov[0].iov_len = 2;
-    iov[1].iov_base = sizeof_cola_s;
-    iov[1].iov_len = SIZE_INT;
-    int c_size = atoi(sizeof_cola_s) + 1;
-    /* Puede que falle ya que solo coge 10 primeros caracteres */
+    /* Get the size of the queue */
+    c_size = strlen(cola) + 1;
+    iov[1].iov_base = &c_size;
+    iov[1].iov_len = sizeof(c_size);
+    /* Check that the queue name is not greater than the max allowed */
     if (c_size > NAME_SIZE)
     {
         perror("Nombre de la cola demasiado largo");
         return -1;
     }
+    /* Set up the queue */
     iov[2].iov_base = cola;
-    iov[2].iov_len = atoi(sizeof_cola_s) + 1;
+    iov[2].iov_len = c_size;
 
     writev(s, iov, 3);
 
@@ -130,6 +105,33 @@ int destroyMQ(const char *cola)
 }
 int put(const char *cola, const void *mensaje, uint32_t tam)
 {
+    int s, c_size;
+    struct iovec iov[5];
+
+    /* Set the put option value */
+    char opc = 'P';
+    char *opcion = (char *)malloc(2 * sizeof(char));
+    opcion[0] = opc;
+    opcion[1] = '\0';
+    iov[0].iov_base = opcion;
+    iov[0].iov_len = 2;
+
+    /* Size of the queue and the queue itself*/
+    c_size = strlen(cola) + 1;
+    iov[1].iov_base = &c_size;
+    iov[1].iov_len = sizeof(c_size);
+    /* Check that the queue name is not greater than the max allowed */
+    if (c_size > NAME_SIZE)
+    {
+        perror("Nombre de la cola demasiado largo");
+        return -1;
+    }
+    /* Set up the queue */
+    iov[2].iov_base = cola;
+    iov[2].iov_len = c_size;
+
+    /* Size of the message and the message itself */
+
     return 0;
 }
 int get(const char *cola, void **mensaje, uint32_t *tam, bool blocking)

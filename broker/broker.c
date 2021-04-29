@@ -128,14 +128,14 @@ int main(int argc, char *argv[])
         op = buf[0];
 
         /* Leer size del nombre de la cola */
-        if ((leido = read(s_conec, buf, 10)) < 0)
+        if ((leido = read(s_conec, &c_size, sizeof(int))) < 0)
         {
             perror("error en read");
             read_error(s, s_conec);
             /* Return 2 means: error en read */
             return 2;
         }
-        c_size = atoi(buf) + 1;
+        //c_size = atoi(buf) + 1;
 
         /* Reservar espacio para el nombre de la cola */
         cola_name = malloc(c_size);
