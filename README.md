@@ -11,3 +11,8 @@ server side.
 Notas: se podria crear en la clase libzerocopyMQ una funcion que haga un setup
 de los elementos opcion, cola size y cola name. Similar a create_destroy pero
 que sirva para todos. Cuidar el handling del pointer a la struct iovec.
+
+
+Updates:
+
+Changed from remote http to remote ssh
