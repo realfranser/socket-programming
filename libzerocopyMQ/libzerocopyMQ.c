@@ -10,9 +10,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* Check for removal */
-char *pchar;
-
 /* Connects to socket using env variables (used by all 4 options) */
 int connect_socket()
 {
@@ -61,19 +58,18 @@ int wait_response(int fd)
     return res;
 }
 
-int iov_init(const char *cola, char opc, struct iovec *iov)
+int iov_init(const char *cola, char op, struct iovec *iov)
 {
     int s, c_size;
 
     if ((s = connect_socket()) < 0)
         return -1;
 
-    char *opcion = (char *)malloc(2 * sizeof(char));
-
-    /* Set the create or destroy option value */
-    opcion[0] = opc;
-    opcion[1] = '\0';
-    iov[0].iov_base = opcion;
+    /* Set the option value */
+    char *op_str = (char *)malloc(2 * sizeof(char));
+    op_str[0] = op;
+    op_str[1] = '\0';
+    iov[0].iov_base = op_str;
     iov[0].iov_len = 2;
     /* Get the size of the queue */
     c_size = strlen(cola) + 1;
@@ -117,7 +113,7 @@ int destroyMQ(const char *cola)
 }
 int put(const char *cola, const void *mensaje, uint32_t tam)
 {
-    int s, c_size;
+    int s;
     //ssize_t nwritten;
     struct iovec iov[5];
     char *msg;
@@ -125,28 +121,6 @@ int put(const char *cola, const void *mensaje, uint32_t tam)
 
     if ((s = iov_init(cola, 'P', &iov)) < 0)
         return -1;
-
-    /* Set the put option value */
-    /*char opc = 'P';
-    char *opcion = (char *)malloc(2 * sizeof(char));
-    opcion[0] = opc;
-    opcion[1] = '\0';
-    iov[0].iov_base = opcion;
-    iov[0].iov_len = 2;
-
-    /* Size of the queue and the queue itself*/
-    /*c_size = strlen(cola) + 1;
-    iov[1].iov_base = &c_size;
-    iov[1].iov_len = sizeof(c_size);
-    /* Check that the queue name is not greater than the max allowed */
-    /*if (c_size > NAME_SIZE)
-    {
-        perror("Nombre de la cola demasiado largo");
-        return -1;
-    }
-    /* Set up the queue */
-    /*iov[2].iov_base = cola;
-    iov[2].iov_len = c_size;*/
 
     /* Check that the size of the message is not greater than the max allowed */
     if (tam > MSG_SIZE)
@@ -172,15 +146,60 @@ int put(const char *cola, const void *mensaje, uint32_t tam)
         iov[4].iov_len = tam;
     }
 
-    for (int i = 0; i < 5; i++)
-    {
-        printf("Element %d is -> size: %d, content: %s\n", i, iov[i].iov_len, iov[i].iov_base);
-    }
     writev(s, iov, 5);
 
     return wait_response(s);
 }
+
 int get(const char *cola, void **mensaje, uint32_t *tam, bool blocking)
 {
+    int s, msg_size, leido;
+    struct iovec iov[3];
+    char buf[16];
+
+    if ((s = iov_init(cola, 'G', &iov)) < 0)
+        return -1;
+
+    writev(s, iov, 3);
+
+    /* Note: hacer switch para printear el motivo del error */
+    //if ((leido = read(s, &msg_size, sizeof(msg_size))) < 0)
+    if ((leido = read(s, buf, 16)) < 0)
+    {
+        perror("error en read");
+        close(s);
+        return -1;
+    }
+
+    msg_size = atoi(buf);
+
+    switch (msg_size)
+    {
+    case -1:
+        printf("Error lectura de la cola (nombre incorrecto)\n");
+        return -1;
+
+    case 0:
+        printf("Cola vacia\n");
+        *tam = msg_size;
+        return 0;
+
+    default:
+        printf("El mensaje tiene un size de: %s\n", buf);
+        *mensaje = malloc(msg_size);
+        *tam = msg_size;
+        /* Hacemos la lectura del mensage */
+        if ((leido = recv(s, *mensaje, msg_size, MSG_WAITALL)) < 0)
+        {
+            perror("error en el read");
+            close(s);
+            return 1;
+        }
+
+        printf("tam: %d\n", *tam);
+        close(s);
+        break;
+    }
+
     return 0;
 }
