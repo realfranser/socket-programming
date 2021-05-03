@@ -279,7 +279,7 @@ int main(int argc, char *argv[])
             iov_get[1].iov_base = (char *)msg->content;
             iov_get[1].iov_len = msg->size;
 
-            printf("Elemento extraido de \'%s\'correctamente\n\n", cola_name);
+            printf("Elemento extraido de la cola \'%s\'correctamente\n\n", cola_name);
             writev(s_conec, iov_get, 2);
             break;
         }

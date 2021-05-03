@@ -90,11 +90,32 @@ int iov_init(const char *cola, char op, struct iovec *iov)
 
 int createMQ(const char *cola)
 {
-    int s;
+    int s, c_size;
     struct iovec iov[3];
 
-    if ((s = iov_init(cola, 'C', &iov)) < 0)
+    if ((s = connect_socket()) < 0)
         return -1;
+
+    /* Set the option value */
+    char *op_str = (char *)malloc(2 * sizeof(char));
+    op_str[0] = 'C';
+    op_str[1] = '\0';
+    iov[0].iov_base = op_str;
+    iov[0].iov_len = 2;
+    /* Get the size of the queue */
+    c_size = strlen(cola) + 1;
+    iov[1].iov_base = &c_size;
+    iov[1].iov_len = sizeof(c_size);
+    /* Check that the queue name is not greater than the max allowed */
+    if (c_size > NAME_SIZE)
+    {
+        perror("Nombre de la cola demasiado largo");
+        return -1;
+    }
+    /* Set up the queue */
+    iov[2].iov_base = cola;
+    iov[2].iov_len = c_size;
+
     writev(s, iov, 3);
 
     return wait_response(s);
@@ -102,25 +123,67 @@ int createMQ(const char *cola)
 
 int destroyMQ(const char *cola)
 {
-    int s;
+    int s, c_size;
     struct iovec iov[3];
 
-    if ((s = iov_init(cola, 'D', &iov)) < 0)
+    if ((s = connect_socket()) < 0)
         return -1;
+
+    /* Set the option value */
+    char *op_str = (char *)malloc(2 * sizeof(char));
+    op_str[0] = 'D';
+    op_str[1] = '\0';
+    iov[0].iov_base = op_str;
+    iov[0].iov_len = 2;
+    /* Get the size of the queue */
+    c_size = strlen(cola) + 1;
+    iov[1].iov_base = &c_size;
+    iov[1].iov_len = sizeof(c_size);
+    /* Check that the queue name is not greater than the max allowed */
+    if (c_size > NAME_SIZE)
+    {
+        perror("Nombre de la cola demasiado largo");
+        return -1;
+    }
+    /* Set up the queue */
+    iov[2].iov_base = cola;
+    iov[2].iov_len = c_size;
+
     writev(s, iov, 3);
 
     return wait_response(s);
 }
+
 int put(const char *cola, const void *mensaje, uint32_t tam)
 {
-    int s;
+    int s, c_size;
     //ssize_t nwritten;
     struct iovec iov[5];
     char *msg;
     int msg_size = tam + 1;
 
-    if ((s = iov_init(cola, 'P', &iov)) < 0)
+    if ((s = connect_socket()) < 0)
         return -1;
+
+    /* Set the option value */
+    char *op_str = (char *)malloc(2 * sizeof(char));
+    op_str[0] = 'P';
+    op_str[1] = '\0';
+    iov[0].iov_base = op_str;
+    iov[0].iov_len = 2;
+    /* Get the size of the queue */
+    c_size = strlen(cola) + 1;
+    iov[1].iov_base = &c_size;
+    iov[1].iov_len = sizeof(c_size);
+    /* Check that the queue name is not greater than the max allowed */
+    if (c_size > NAME_SIZE)
+    {
+        perror("Nombre de la cola demasiado largo");
+        return -1;
+    }
+    /* Set up the queue */
+    iov[2].iov_base = cola;
+    iov[2].iov_len = c_size;
 
     /* Check that the size of the message is not greater than the max allowed */
     if (tam > MSG_SIZE)
@@ -153,12 +216,32 @@ int put(const char *cola, const void *mensaje, uint32_t tam)
 
 int get(const char *cola, void **mensaje, uint32_t *tam, bool blocking)
 {
-    int s, msg_size, leido;
+    int s, msg_size, leido, c_size;
     struct iovec iov[3];
     char buf[16];
 
-    if ((s = iov_init(cola, 'G', &iov)) < 0)
+    if ((s = connect_socket()) < 0)
         return -1;
+
+    /* Set the option value */
+    char *op_str = (char *)malloc(2 * sizeof(char));
+    op_str[0] = 'G';
+    op_str[1] = '\0';
+    iov[0].iov_base = op_str;
+    iov[0].iov_len = 2;
+    /* Get the size of the queue */
+    c_size = strlen(cola) + 1;
+    iov[1].iov_base = &c_size;
+    iov[1].iov_len = sizeof(c_size);
+    /* Check that the queue name is not greater than the max allowed */
+    if (c_size > NAME_SIZE)
+    {
+        perror("Nombre de la cola demasiado largo");
+        return -1;
+    }
+    /* Set up the queue */
+    iov[2].iov_base = cola;
+    iov[2].iov_len = c_size;
 
     writev(s, iov, 3);
 
