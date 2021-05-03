@@ -273,11 +273,18 @@ int main(int argc, char *argv[])
             /* Element found (pointer to message) */
             printf("contenido: %s, size: %d\n", msg->content, msg->size);
             struct iovec iov_get[2];
-            sprintf(str, "%d", msg->size);
-            iov_get[0].iov_base = strcat(str, "\n");
-            iov_get[0].iov_len = sizeof(str);
-            iov_get[1].iov_base = (char *)msg->content;
-            iov_get[1].iov_len = msg->size;
+            //sprintf(str, "%d", msg->size);
+            //iov_get[0].iov_base = strcat(str, "\n");
+            //iov_get[0].iov_len = sizeof(str);
+            int msg_size = msg->size;
+
+
+            iov_get[0].iov_base = &msg_size;
+            iov_get[0].iov_len = sizeof(msg_size);
+            //iov_get[1].iov_base = (char *)msg->content;
+            //iov_get[1].iov_len = msg->size;
+            iov_get[1].iov_base = msg->content;
+            iov_get[1].iov_len = msg_size;
 
             printf("Elemento extraido de la cola \'%s\'correctamente\n\n", cola_name);
             writev(s_conec, iov_get, 2);
