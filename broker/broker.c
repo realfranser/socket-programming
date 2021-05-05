@@ -78,8 +78,6 @@ int main(int argc, char *argv[])
     struct message *msg;
     void *msg_p;
 
-    char str[16];
-
     if (argc != 2)
     {
         fprintf(stderr, "Uso: %s puerto\n", argv[0]);
@@ -271,18 +269,12 @@ int main(int argc, char *argv[])
                 break;
             }
             /* Element found (pointer to message) */
-            printf("contenido: %s, size: %d\n", msg->content, msg->size);
+            printf("contenido: %s, size: %d\n", (char *)msg->content, msg->size);
             struct iovec iov_get[2];
-            //sprintf(str, "%d", msg->size);
-            //iov_get[0].iov_base = strcat(str, "\n");
-            //iov_get[0].iov_len = sizeof(str);
             int msg_size = msg->size;
-
 
             iov_get[0].iov_base = &msg_size;
             iov_get[0].iov_len = sizeof(msg_size);
-            //iov_get[1].iov_base = (char *)msg->content;
-            //iov_get[1].iov_len = msg->size;
             iov_get[1].iov_base = msg->content;
             iov_get[1].iov_len = msg_size;
 

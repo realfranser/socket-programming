@@ -216,7 +216,7 @@ int put(const char *cola, const void *mensaje, uint32_t tam)
 
 int get(const char *cola, void **mensaje, uint32_t *tam, bool blocking)
 {
-    int s, msg_size, leido, c_size, res;
+    int s, msg_size, leido, c_size;
     struct iovec iov[3];
     //char buf[16];
 
@@ -246,7 +246,7 @@ int get(const char *cola, void **mensaje, uint32_t *tam, bool blocking)
     writev(s, iov, 3);
 
     /* Note: hacer switch para printear el motivo del error */
-    if ((leido = read(s, &res, sizeof(res))) < 0)
+    if ((leido = read(s, &msg_size, sizeof(msg_size))) < 0)
     //if ((leido = read(s, buf, 16)) < 0)
     {
         perror("error en read");
@@ -256,7 +256,7 @@ int get(const char *cola, void **mensaje, uint32_t *tam, bool blocking)
 
     //msg_size = atoi(buf);
 
-    switch (res)
+    switch (msg_size)
     {
     case -1:
         printf("Error lectura de la cola (nombre incorrecto)\n");
@@ -264,19 +264,16 @@ int get(const char *cola, void **mensaje, uint32_t *tam, bool blocking)
 
     case 0:
         printf("Cola vacia\n");
+        printf("El size vacio es: %d\n", msg_size);
         *tam = msg_size;
         return 0;
 
     default:
-        //printf("El mensaje tiene un size de: %s\n", buf);
-        //*mensaje = malloc(msg_size);
-        //*tam = msg_size;
-        printf("El mensaje tiene un size de: %d\n", res);
-        *mensaje = malloc(res);
-        *tam = res;
+        printf("El mensaje tiene un size de: %d\n", msg_size);
+        *mensaje = malloc(msg_size);
+        *tam = msg_size;
         /* Hacemos la lectura del mensage */
-        //if ((leido = recv(s, *mensaje, msg_size, MSG_WAITALL)) < 0)
-        if ((leido = recv(s, *mensaje, res, MSG_WAITALL)) < 1)
+        if ((leido = recv(s, *mensaje, msg_size, MSG_WAITALL)) < 1)
         {
             perror("error en el read");
             close(s);
