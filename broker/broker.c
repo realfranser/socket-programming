@@ -22,7 +22,6 @@ void read_error(int s, int s_conec)
     iov_ret[0].iov_base = &ret_err;
     iov_ret[0].iov_len = sizeof(ret_err);
     writev(s_conec, iov_ret, 1);
-    /* Cerramos descriptores */
     close(s);
     close(s_conec);
 }

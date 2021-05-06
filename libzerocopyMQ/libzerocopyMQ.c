@@ -46,7 +46,6 @@ int connect_socket()
 
 int wait_response(int fd)
 {
-    /* Note: hacer switch para printear el motivo del error */
     int res, leido;
     if ((leido = read(fd, &res, sizeof(res))) < 0)
     {
@@ -157,7 +156,6 @@ int destroyMQ(const char *cola)
 int put(const char *cola, const void *mensaje, uint32_t tam)
 {
     int s, c_size;
-    //ssize_t nwritten;
     struct iovec iov[5];
     char *msg;
     int msg_size = tam + 1;
@@ -218,7 +216,6 @@ int get(const char *cola, void **mensaje, uint32_t *tam, bool blocking)
 {
     int s, msg_size, leido, c_size;
     struct iovec iov[3];
-    //char buf[16];
 
     if ((s = connect_socket()) < 0)
         return -1;
@@ -247,14 +244,11 @@ int get(const char *cola, void **mensaje, uint32_t *tam, bool blocking)
 
     /* Note: hacer switch para printear el motivo del error */
     if ((leido = read(s, &msg_size, sizeof(msg_size))) < 0)
-    //if ((leido = read(s, buf, 16)) < 0)
     {
         perror("error en read");
         close(s);
         return -1;
     }
-
-    //msg_size = atoi(buf);
 
     switch (msg_size)
     {
