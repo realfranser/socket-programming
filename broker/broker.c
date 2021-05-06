@@ -247,6 +247,10 @@ int main(int argc, char *argv[])
             }
             msg->content = msg_p;
 
+            bloq_queue = get_cola(bloq_dict, cola_name);
+            if (bloq_queue != NULL)
+            {
+                        }
             /* Introduce message in the selected queue */
             if (cola_push_back(queue, msg) < 0)
             {
