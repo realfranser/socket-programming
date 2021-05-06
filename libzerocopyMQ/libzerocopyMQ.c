@@ -222,7 +222,7 @@ int get(const char *cola, void **mensaje, uint32_t *tam, bool blocking)
 
     /* Set the option value */
     char *op_str = (char *)malloc(2 * sizeof(char));
-    op_str[0] = 'G';
+    op_str[0] = (blocking) ? 'B' : 'G';
     op_str[1] = '\0';
     iov[0].iov_base = op_str;
     iov[0].iov_len = 2;

@@ -72,7 +72,9 @@ int main(int argc, char *argv[])
     char op_str[2];
 
     struct diccionario *dict;
+    struct diccionario *bloq_dict;
     struct cola *queue;
+    struct cola *bloq_queue;
 
     struct message *msg;
     void *msg_p;
@@ -116,6 +118,15 @@ int main(int argc, char *argv[])
     if (dict == NULL)
     {
         perror("Error en la creacion del diccionario");
+        close(s);
+        return 1;
+    }
+
+    /* Creacion del diccionario de lectores bloqueados */
+    bloq_dict = dic_create();
+    if (bloq_dict == NULL)
+    {
+        perror("Error en la creacion del diccionario de lectores bloqueados");
         close(s);
         return 1;
     }
@@ -235,6 +246,7 @@ int main(int argc, char *argv[])
                 return 2;
             }
             msg->content = msg_p;
+
             /* Introduce message in the selected queue */
             if (cola_push_back(queue, msg) < 0)
             {
@@ -264,6 +276,34 @@ int main(int argc, char *argv[])
             {
                 /* No element found (empty queue) */
                 printf("La cola esta vacia\n");
+                /* Comprobamos si se solicita una lectura bloqueante */
+                if (op == 'B')
+                {
+                    queue = get_cola(bloq_dict, cola_name);
+                    /* No hay lectores bloqueados en esa cola */
+                    if (queue == NULL)
+                    {
+                        /* Se crea nueva cola de lectores bloqueados */
+                        queue = cola_create();
+                        if (queue == NULL)
+                        {
+                            perror("error creacion cola lectores bloqueados");
+                            read_error(s, s_conec);
+                            return 2;
+                        }
+                        /* Add cola de lectores bloqueados a su diccionario */
+                        if (dic_put(bloq_dict, cola_name, queue) < 0)
+                        {
+                            return_err(s_conec);
+                            continue;
+                        }
+                        cola_push_back(queue, s_conec);
+                        continue;
+                    }
+                    /* Se suma este lector a su cola de bloqueados */
+                    cola_push_back(queue, s_conec);
+                    continue;
+                }
                 return_ok(s_conec);
                 break;
             }
