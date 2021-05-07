@@ -60,6 +60,18 @@ void print_queue(void *value)
     printf("%s\n", (char *)msg->content);
 }
 
+void bloq_destroy(void *msg_p)
+{
+    int s_user;
+    struct message *b_user = malloc(sizeof(struct message));
+    /* Obtenemos mensaje de la cola */
+    b_user = msg_p;
+    /* Pasamos dicho string number a integer */
+    s_user = atoi(b_user->content);
+    /* Devolvemos error al user unqueued */
+    return_err(s_user);
+}
+
 int main(int argc, char *argv[])
 {
     int s, s_conec, leido, api_err;
@@ -78,6 +90,8 @@ int main(int argc, char *argv[])
 
     struct message *msg;
     void *msg_p;
+
+    int s_bloq;
 
     if (argc != 2)
     {
@@ -207,6 +221,15 @@ int main(int argc, char *argv[])
                 break;
             }
 
+            /* Seccion de tratamiento de posibles usuarios bloqueados */
+            bloq_queue = dic_get(bloq_dict, cola_name, &api_err);
+            if (api_err != -1)
+            {
+                /* Devolver a users bloqueados mensaje de error (al no leer mensaje) */
+                cola_visit(bloq_queue, bloq_destroy);
+                dic_remove_entry(bloq_dict, cola_name, free_cola);
+            }
+
             printf("Cola \'%s\' destruida correctamente\n\n", cola_name);
             return_ok(s_conec);
             break;
@@ -247,10 +270,43 @@ int main(int argc, char *argv[])
             }
             msg->content = msg_p;
 
-            bloq_queue = get_cola(bloq_dict, cola_name);
-            if (bloq_queue != NULL)
+            /* Seccion para el tratamiento de posibles users bloqueados */
+            bloq_queue = dic_get(bloq_dict, cola_name, &api_err);
+            if (api_err != -1)
             {
-                        }
+                struct message *s_msg = malloc(sizeof(struct message));
+                /* Enviamos el mensaje recien escrito al usuario bloqueado */
+                s_msg = cola_pop_front(bloq_queue, &api_err);
+
+                /* Obtenemos el descriptor de la conexion con el usuario bloqueado */
+                s_bloq = atoi(s_msg->content);
+
+                /* Preparamos mensaje de vuelta con el mensaje que se ha introducido ahora */
+                printf("contenido: %s, size: %d\n", (char *)msg->content, msg->size);
+                struct iovec iov_get[2];
+                int msg_size = msg->size;
+
+                iov_get[0].iov_base = &msg_size;
+                iov_get[0].iov_len = sizeof(msg_size);
+                iov_get[1].iov_base = msg->content;
+                iov_get[1].iov_len = msg_size;
+
+                printf("Elemento extraido de la cola \'%s\'correctamente\n\n", cola_name);
+                writev(s_bloq, iov_get, 2);
+
+                /* En caso de que la cola se quede vacia, se elimina del diccionario de bloqueados */
+                if (cola_length(bloq_queue) <= 0)
+                {
+                    dic_remove_entry(bloq_dict, cola_name, free_cola);
+                    printf("Se ha eliminado la cola \'%s\'de bloqueos\n", (char *)cola_name);
+                }
+
+                /* Cerramos desctiptor del usuario bloqueado */
+                close(s_bloq);
+
+                free(s_msg);
+                break;
+            }
             /* Introduce message in the selected queue */
             if (cola_push_back(queue, msg) < 0)
             {
@@ -263,7 +319,8 @@ int main(int argc, char *argv[])
             return_ok(s_conec);
             break;
 
-        /* Get value of an existing queue */
+            /* Get value of an existing queue */
+
         default:
             msg = malloc(sizeof(struct message));
             /* Get pointer to the queue */
@@ -280,12 +337,16 @@ int main(int argc, char *argv[])
             {
                 /* No element found (empty queue) */
                 printf("La cola esta vacia\n");
-                /* Comprobamos si se solicita una lectura bloqueante */
+
+                /* Seccion para el tratamiento de posible solicitud de bloqueo */
                 if (op == 'B')
                 {
-                    queue = get_cola(bloq_dict, cola_name);
+                    /* Pasamos el int s_conec a formato string para poder manejarlo con el formato msg */
+                    msg_p = malloc(16 * sizeof(char));
+                    sprintf(msg_p, "%d", s_conec);
+                    queue = dic_get(bloq_dict, cola_name, &api_err);
                     /* No hay lectores bloqueados en esa cola */
-                    if (queue == NULL)
+                    if (queue == -1)
                     {
                         /* Se crea nueva cola de lectores bloqueados */
                         queue = cola_create();
@@ -301,11 +362,12 @@ int main(int argc, char *argv[])
                             return_err(s_conec);
                             continue;
                         }
-                        cola_push_back(queue, s_conec);
-                        continue;
                     }
+                    /* Guardamos el descriptor conexion en formato string de size 16 */
+                    msg->size = 16 * sizeof(char);
+                    msg->content = msg_p;
                     /* Se suma este lector a su cola de bloqueados */
-                    cola_push_back(queue, s_conec);
+                    cola_push_back(queue, msg);
                     continue;
                 }
                 return_ok(s_conec);
