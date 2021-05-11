@@ -62,14 +62,10 @@ void print_queue(void *value)
 
 void bloq_destroy(void *msg_p)
 {
-    int s_user;
-    struct message *b_user = malloc(sizeof(struct message));
-    /* Obtenemos mensaje de la cola */
-    b_user = msg_p;
-    /* Pasamos dicho string number a integer */
-    s_user = atoi(b_user->content);
+    int *s_user = msg_p;
     /* Devolvemos error al user unqueued */
-    return_err(s_user);
+    printf("Se le cierra el bloqueo al user: %d", *s_user);
+    return_err(*s_user);
 }
 
 int main(int argc, char *argv[])
@@ -89,9 +85,8 @@ int main(int argc, char *argv[])
     struct cola *bloq_queue;
 
     struct message *msg;
-    void *msg_p;
-
-    int s_bloq;
+    struct message *s_msg;
+    char *msg_p;
 
     if (argc != 2)
     {
@@ -274,12 +269,12 @@ int main(int argc, char *argv[])
             bloq_queue = dic_get(bloq_dict, cola_name, &api_err);
             if (api_err != -1)
             {
-                struct message *s_msg = malloc(sizeof(struct message));
-                /* Enviamos el mensaje recien escrito al usuario bloqueado */
-                s_msg = cola_pop_front(bloq_queue, &api_err);
-
+                int cola_size;
+                cola_size = cola_length(bloq_queue);
+                printf("El size de la cola es: %d\n", cola_size);
                 /* Obtenemos el descriptor de la conexion con el usuario bloqueado */
-                s_bloq = atoi(s_msg->content);
+                int *client_fd = cola_pop_front(bloq_queue, &api_err);
+                printf("valor del fd cliente bloqueado: %d\n", client_fd);
 
                 /* Preparamos mensaje de vuelta con el mensaje que se ha introducido ahora */
                 printf("contenido: %s, size: %d\n", (char *)msg->content, msg->size);
@@ -292,7 +287,7 @@ int main(int argc, char *argv[])
                 iov_get[1].iov_len = msg_size;
 
                 printf("Elemento extraido de la cola \'%s\'correctamente\n\n", cola_name);
-                writev(s_bloq, iov_get, 2);
+                writev(*client_fd, iov_get, 2);
 
                 /* En caso de que la cola se quede vacia, se elimina del diccionario de bloqueados */
                 if (cola_length(bloq_queue) <= 0)
@@ -302,9 +297,8 @@ int main(int argc, char *argv[])
                 }
 
                 /* Cerramos desctiptor del usuario bloqueado */
-                close(s_bloq);
-
-                free(s_msg);
+                close(*client_fd);
+                return_ok(s_conec);
                 break;
             }
             /* Introduce message in the selected queue */
@@ -341,33 +335,40 @@ int main(int argc, char *argv[])
                 /* Seccion para el tratamiento de posible solicitud de bloqueo */
                 if (op == 'B')
                 {
+
+                    /* Reservamos espacio en memoria para guardar el s_conec del cliente */
+                    int *client_fd = malloc(sizeof(int));
+                    *client_fd = s_conec;
                     /* Pasamos el int s_conec a formato string para poder manejarlo con el formato msg */
-                    msg_p = malloc(16 * sizeof(char));
-                    sprintf(msg_p, "%d", s_conec);
-                    queue = dic_get(bloq_dict, cola_name, &api_err);
+                    struct cola *bloq_queue;
+                    bloq_queue = dic_get(bloq_dict, cola_name, &api_err);
                     /* No hay lectores bloqueados en esa cola */
-                    if (queue == -1)
+                    if (api_err == -1)
                     {
                         /* Se crea nueva cola de lectores bloqueados */
-                        queue = cola_create();
-                        if (queue == NULL)
+                        struct cola *new_bloq_queue;
+                        new_bloq_queue = cola_create();
+                        if (new_bloq_queue == NULL)
                         {
                             perror("error creacion cola lectores bloqueados");
                             read_error(s, s_conec);
                             return 2;
                         }
                         /* Add cola de lectores bloqueados a su diccionario */
-                        if (dic_put(bloq_dict, cola_name, queue) < 0)
+                        if (dic_put(bloq_dict, cola_name, new_bloq_queue) < 0)
                         {
                             return_err(s_conec);
                             continue;
                         }
+                        printf("No existe diccionario bloqueados previo\n");
+                        cola_push_back(new_bloq_queue, client_fd);
+                        printf("Se ha insertado descriptor: %d\n", *client_fd);
+                        continue;
                     }
                     /* Guardamos el descriptor conexion en formato string de size 16 */
-                    msg->size = 16 * sizeof(char);
-                    msg->content = msg_p;
+                    printf("Added a un diccionario de bloqueos existente\n");
                     /* Se suma este lector a su cola de bloqueados */
-                    cola_push_back(queue, msg);
+                    cola_push_back(bloq_queue, client_fd);
                     continue;
                 }
                 return_ok(s_conec);
