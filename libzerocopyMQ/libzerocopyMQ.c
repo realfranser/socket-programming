@@ -222,7 +222,7 @@ int get(const char *cola, void **mensaje, uint32_t *tam, bool blocking)
 
     /* Set the option value */
     char *op_str = (char *)malloc(2 * sizeof(char));
-    op_str[0] = 'G';
+    op_str[0] = (blocking) ? 'B' : 'G';
     op_str[1] = '\0';
     iov[0].iov_base = op_str;
     iov[0].iov_len = 2;
@@ -257,6 +257,40 @@ int get(const char *cola, void **mensaje, uint32_t *tam, bool blocking)
         return -1;
 
     case 0:
+        /* En caso de que sea bloqueante, esperamos a recibir mensaje del server */
+        if (blocking)
+        {
+            /* Esperamos a que el server devuelva el mensaje */
+            if ((leido = read(s, &msg_size, sizeof(msg_size))) < 0)
+            {
+                perror("error en read");
+                close(s);
+                return -1;
+            }
+
+            /* Si el size es menor que 0, error: posiblemente la cola ha sido destruida */
+            if (msg_size < 0)
+            {
+                perror("Error lectura de la cola (cola destruida)\n");
+                return -1;
+            }
+
+            /* Creamos espacio en memoria para alocar el mensaje */
+            *mensaje = malloc(msg_size);
+            *tam = msg_size;
+            if ((leido = recv(s, *mensaje, msg_size, MSG_WAITALL)) < 0)
+            {
+                perror("error en el read");
+                close(s);
+                return -1;
+            }
+
+            printf("tam: %d\n", *tam);
+            close(s);
+            break;
+        }
+
+        /* En caso de que la lectura no sea bloqueante, simplemente no se puede leer de una cola vacia */
         printf("Cola vacia\n");
         printf("El size vacio es: %d\n", msg_size);
         *tam = msg_size;
@@ -267,11 +301,11 @@ int get(const char *cola, void **mensaje, uint32_t *tam, bool blocking)
         *mensaje = malloc(msg_size);
         *tam = msg_size;
         /* Hacemos la lectura del mensage */
-        if ((leido = recv(s, *mensaje, msg_size, MSG_WAITALL)) < 1)
+        if ((leido = recv(s, *mensaje, msg_size, MSG_WAITALL)) < 0)
         {
             perror("error en el read");
             close(s);
-            return 1;
+            return -1;
         }
 
         printf("tam: %d\n", *tam);

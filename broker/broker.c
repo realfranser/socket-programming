@@ -60,6 +60,14 @@ void print_queue(void *value)
     printf("%s\n", (char *)msg->content);
 }
 
+void bloq_destroy(void *msg_p)
+{
+    int *s_user = msg_p;
+    /* Devolvemos error al user unqueued */
+    printf("Se le cierra el bloqueo al user: %d", *s_user);
+    return_err(*s_user);
+}
+
 int main(int argc, char *argv[])
 {
     int s, s_conec, leido, api_err;
@@ -72,10 +80,13 @@ int main(int argc, char *argv[])
     char op_str[2];
 
     struct diccionario *dict;
+    struct diccionario *bloq_dict;
     struct cola *queue;
+    struct cola *bloq_queue;
 
     struct message *msg;
-    void *msg_p;
+    struct message *s_msg;
+    char *msg_p;
 
     if (argc != 2)
     {
@@ -116,6 +127,15 @@ int main(int argc, char *argv[])
     if (dict == NULL)
     {
         perror("Error en la creacion del diccionario");
+        close(s);
+        return 1;
+    }
+
+    /* Creacion del diccionario de lectores bloqueados */
+    bloq_dict = dic_create();
+    if (bloq_dict == NULL)
+    {
+        perror("Error en la creacion del diccionario de lectores bloqueados");
         close(s);
         return 1;
     }
@@ -196,6 +216,15 @@ int main(int argc, char *argv[])
                 break;
             }
 
+            /* Seccion de tratamiento de posibles usuarios bloqueados */
+            bloq_queue = dic_get(bloq_dict, cola_name, &api_err);
+            if (api_err != -1)
+            {
+                /* Devolver a users bloqueados mensaje de error (al no leer mensaje) */
+                cola_visit(bloq_queue, bloq_destroy);
+                dic_remove_entry(bloq_dict, cola_name, free_cola);
+            }
+
             printf("Cola \'%s\' destruida correctamente\n\n", cola_name);
             return_ok(s_conec);
             break;
@@ -235,6 +264,43 @@ int main(int argc, char *argv[])
                 return 2;
             }
             msg->content = msg_p;
+
+            /* Seccion para el tratamiento de posibles users bloqueados */
+            bloq_queue = dic_get(bloq_dict, cola_name, &api_err);
+            if (api_err != -1)
+            {
+                int cola_size;
+                cola_size = cola_length(bloq_queue);
+                printf("El size de la cola es: %d\n", cola_size);
+                /* Obtenemos el descriptor de la conexion con el usuario bloqueado */
+                int *client_fd = cola_pop_front(bloq_queue, &api_err);
+                printf("valor del fd cliente bloqueado: %d\n", client_fd);
+
+                /* Preparamos mensaje de vuelta con el mensaje que se ha introducido ahora */
+                printf("contenido: %s, size: %d\n", (char *)msg->content, msg->size);
+                struct iovec iov_get[2];
+                int msg_size = msg->size;
+
+                iov_get[0].iov_base = &msg_size;
+                iov_get[0].iov_len = sizeof(msg_size);
+                iov_get[1].iov_base = msg->content;
+                iov_get[1].iov_len = msg_size;
+
+                printf("Elemento extraido de la cola \'%s\'correctamente\n\n", cola_name);
+                writev(*client_fd, iov_get, 2);
+
+                /* En caso de que la cola se quede vacia, se elimina del diccionario de bloqueados */
+                if (cola_length(bloq_queue) <= 0)
+                {
+                    dic_remove_entry(bloq_dict, cola_name, free_cola);
+                    printf("Se ha eliminado la cola \'%s\'de bloqueos\n", (char *)cola_name);
+                }
+
+                /* Cerramos desctiptor del usuario bloqueado */
+                close(*client_fd);
+                return_ok(s_conec);
+                break;
+            }
             /* Introduce message in the selected queue */
             if (cola_push_back(queue, msg) < 0)
             {
@@ -247,7 +313,8 @@ int main(int argc, char *argv[])
             return_ok(s_conec);
             break;
 
-        /* Get value of an existing queue */
+            /* Get value of an existing queue */
+
         default:
             msg = malloc(sizeof(struct message));
             /* Get pointer to the queue */
@@ -264,6 +331,46 @@ int main(int argc, char *argv[])
             {
                 /* No element found (empty queue) */
                 printf("La cola esta vacia\n");
+
+                /* Seccion para el tratamiento de posible solicitud de bloqueo */
+                if (op == 'B')
+                {
+
+                    /* Reservamos espacio en memoria para guardar el s_conec del cliente */
+                    int *client_fd = malloc(sizeof(int));
+                    *client_fd = s_conec;
+                    /* Pasamos el int s_conec a formato string para poder manejarlo con el formato msg */
+                    struct cola *bloq_queue;
+                    bloq_queue = dic_get(bloq_dict, cola_name, &api_err);
+                    /* No hay lectores bloqueados en esa cola */
+                    if (api_err == -1)
+                    {
+                        /* Se crea nueva cola de lectores bloqueados */
+                        struct cola *new_bloq_queue;
+                        new_bloq_queue = cola_create();
+                        if (new_bloq_queue == NULL)
+                        {
+                            perror("error creacion cola lectores bloqueados");
+                            read_error(s, s_conec);
+                            return 2;
+                        }
+                        /* Add cola de lectores bloqueados a su diccionario */
+                        if (dic_put(bloq_dict, cola_name, new_bloq_queue) < 0)
+                        {
+                            return_err(s_conec);
+                            continue;
+                        }
+                        printf("No existe diccionario bloqueados previo\n");
+                        cola_push_back(new_bloq_queue, client_fd);
+                        printf("Se ha insertado descriptor: %d\n", *client_fd);
+                        continue;
+                    }
+                    /* Guardamos el descriptor conexion en formato string de size 16 */
+                    printf("Added a un diccionario de bloqueos existente\n");
+                    /* Se suma este lector a su cola de bloqueados */
+                    cola_push_back(bloq_queue, client_fd);
+                    continue;
+                }
                 return_ok(s_conec);
                 break;
             }
